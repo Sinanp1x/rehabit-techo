@@ -1,5 +1,5 @@
 import { type Habit, type HabitLog } from "../db";
-import { format, subDays, isSameDay, parseISO } from "date-fns";
+import { format, subDays, isSameDay } from "date-fns";
 
 export const calculateStats = (habits: Habit[], logs: HabitLog[]) => {
   const today = new Date();

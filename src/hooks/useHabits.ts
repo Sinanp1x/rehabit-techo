@@ -14,7 +14,6 @@ export const useHabits = () => {
     const sorted = logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     
     let streak = 0;
     let checkDate = new Date(); // Start checking from Today

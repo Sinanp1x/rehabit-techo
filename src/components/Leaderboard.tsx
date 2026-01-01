@@ -1,5 +1,4 @@
-import { clsx } from "clsx";
-import { Users, Crown, Medal } from "lucide-react";
+import { Users, Crown } from "lucide-react";
 
 interface LeaderboardProps {
   myScore: number;

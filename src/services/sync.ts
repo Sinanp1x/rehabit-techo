@@ -3,7 +3,7 @@ import { firestore } from "../firebase";
 import { 
   collection, 
   doc, 
-  setDoc, 
+  //setDoc, 
   writeBatch, 
   getCountFromServer // <--- Import this!
 } from "firebase/firestore"; // Added getDoc
@@ -11,7 +11,7 @@ import { getUserID, getFriendID } from "../utils/user"; // Import helpers
 
 // Helper to get user ID (For now, we'll hardcode a "demo-user" ID. 
 // We will add real Login in the next step!)
-const USER_ID = "user_iphone7_demo"; 
+//const USER_ID = "user_iphone7_demo"; 
 
 export const syncData = async () => {
   if (!navigator.onLine) return; // Don't try if offline

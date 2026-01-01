@@ -7,7 +7,7 @@ import { syncData } from '../services/sync';
 import { Plus, CloudUpload } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
-import { type Habit } from '../db';
+//import { type Habit } from '../db';
 
 export const HomePage = () => {
   const { habits, addHabit, toggleHabit, deleteHabit, updateProgress } = useHabits(); // <--- Get delete & update
