@@ -34,18 +34,18 @@ export const syncData = async () => {
 
     const batch = writeBatch(firestore);
 
-    // 3. Prepare Habit Uploads (Top-level collection with userId)
+    // 3. Prepare Habit Uploads (Subcollection under user)
     for (const habit of pendingHabits) {
-      const ref = doc(firestore, "habits", habit.id!.toString());
+      const ref = doc(firestore, "users", USER_ID, "habits", habit.id!.toString());
       batch.set(ref, { 
         ...habit, 
         syncStatus: 'synced'
       });
     }
 
-    // 4. Prepare Log Uploads (Top-level collection with userId)
+    // 4. Prepare Log Uploads (Subcollection under user)
     for (const log of pendingLogs) {
-      const ref = doc(firestore, "logs", log.id!.toString());
+      const ref = doc(firestore, "users", USER_ID, "logs", log.id!.toString());
       batch.set(ref, { 
         ...log,
         syncStatus: 'synced'

@@ -21,27 +21,13 @@ service cloud.firestore {
     }
     
     // --- 3. HABITS ---
-    match /habits/{habitId} {
-      // READ: Allow if the habit belongs to the user
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // CREATE: Allow if the user is tagging the new habit with their own ID
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // UPDATE & DELETE: Allow if the existing habit belongs to the user
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    match /users/{userId}/habits/{habitId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // --- 4. LOGS ---
-    match /logs/{logId} {
-      // READ: Allow if the log belongs to the user
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // CREATE: Allow if the user is tagging the new log with their own ID
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // UPDATE & DELETE: Allow if the existing log belongs to the user
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    match /users/{userId}/logs/{logId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
