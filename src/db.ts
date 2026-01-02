@@ -3,6 +3,7 @@ import Dexie, { type Table } from 'dexie';
 
 export interface Habit {
   id?: number;
+  userId: string;             // Firebase user ID for security
   title: string;
   category: string;
   color: string;
@@ -20,6 +21,7 @@ export interface Habit {
 
 export interface HabitLog {
   id?: number;
+  userId: string;             // Firebase user ID for security
   habitId: number;
   date: string;
   status: 'done';
@@ -31,10 +33,10 @@ class HabitDatabase extends Dexie {
   logs!: Table<HabitLog>;
 
   constructor() {
-    super('HabitTrackerDB_v3'); // <--- Bumped to v3
+    super('HabitTrackerDB_v4'); // <--- Bumped to v4 for userId
     this.version(1).stores({
-      habits: '++id, title, category, type, archived, syncStatus',
-      logs: '++id, habitId, date, [habitId+date], syncStatus'
+      habits: '++id, userId, title, category, type, archived, syncStatus',
+      logs: '++id, userId, habitId, date, [habitId+date], [userId+date], syncStatus'
     });
   }
 }

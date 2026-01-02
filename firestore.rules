@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- 1. USER PROFILES ---
+    // Allow users to access only their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // --- 2. LICENSE KEYS ---
+    match /license_keys/{keyId} {
+      // Allow reading keys to check validity
+      allow read: if request.auth != null;
+      
+      // Allow updating keys (to mark them as 'claimed')
+      allow update: if request.auth != null;
+      
+      // Block users from creating new keys or deleting existing ones
+      allow create, delete: if false;
+    }
+    
+    // --- 3. HABITS ---
+    match /habits/{habitId} {
+      // READ: Allow if the habit belongs to the user
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // CREATE: Allow if the user is tagging the new habit with their own ID
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // UPDATE & DELETE: Allow if the existing habit belongs to the user
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // --- 4. LOGS ---
+    match /logs/{logId} {
+      // READ: Allow if the log belongs to the user
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // CREATE: Allow if the user is tagging the new log with their own ID
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // UPDATE & DELETE: Allow if the existing log belongs to the user
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}

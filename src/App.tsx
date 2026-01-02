@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { checkUserLicense } from './services/license'; 
 import { initializeNotifications } from './services/notifications';
+import { migrateExistingData } from './utils/migration';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './firebase';
 import { Home, BarChart2, Settings, Loader2 } from 'lucide-react';
@@ -21,6 +22,9 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Migrate existing data to add userId
+        await migrateExistingData();
+        
         const licensed = await checkUserLicense();
         setHasLicense(licensed);
         
