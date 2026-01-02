@@ -253,7 +253,7 @@ export const SettingsPage = () => {
         </button>
       </div>
 
-      <div className="text-center pb-8"><p className="text-xs text-gray-300">Habit Tracker v2.1</p></div>
+      <div className="text-center pb-8"><p className="text-xs text-gray-300">Habit Tracker v1.0</p></div>
     </div>
   );
 };

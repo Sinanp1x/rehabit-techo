@@ -23,7 +23,7 @@ export const LoginPage = ({ onLogin }: LoginPageProps) => {
       {/* Animated Logo */}
       <div className="bg-white p-6 rounded-3xl shadow-lg mb-8 animate-bounce-slow">
         <img 
-          src="/logo.svg" 
+          src="/logo.png" 
           alt="Rehabit Techo Logo" 
           className="w-24 h-24 rounded-2xl"
         />
@@ -50,7 +50,7 @@ export const LoginPage = ({ onLogin }: LoginPageProps) => {
         <span className="font-bold">Open Your Techo</span>
       </button>
 
-      <p className="mt-8 text-xs text-gray-400">v2.1 • Digital Techo</p>
+      <p className="mt-8 text-xs text-gray-400">v1.0 • Digital Techo</p>
     </div>
   );
 };
