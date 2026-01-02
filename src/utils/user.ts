@@ -1,13 +1,12 @@
 // src/utils/user.ts
+import { auth } from '../firebase';
 
-export const getUserID = () => {
-  let id = localStorage.getItem("habit_user_id");
-  if (!id) {
-    // Generate a simple random ID like "user_a1b2c3"
-    id = "user_" + Math.random().toString(36).substring(2, 9);
-    localStorage.setItem("habit_user_id", id);
+export const getUserID = (): string => {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('No authenticated user. Please log in.');
   }
-  return id;
+  return user.uid;
 };
 
 export const getFriendID = () => {

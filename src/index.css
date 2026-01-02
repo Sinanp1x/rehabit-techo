@@ -2,9 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-background text-text-main antialiased;
-  -webkit-tap-highlight-color: transparent;
+@layer base {
+  body {
+    @apply bg-background text-text-main antialiased;
+    -webkit-tap-highlight-color: transparent;
+    /* iOS safe area support */
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar {

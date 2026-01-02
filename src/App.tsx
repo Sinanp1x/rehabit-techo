@@ -1,58 +1,86 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { HomePage } from './pages/HomePage';
 import { StatsPage } from './pages/StatsPage';
-import { Home, BarChart2, Settings } from 'lucide-react';
-import { clsx } from 'clsx';
 import { SettingsPage } from './pages/SettingsPage';
+import { LoginPage } from './pages/LoginPage';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { checkUserLicense } from './services/license'; 
+import { initializeNotifications } from './services/notifications';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { auth } from './firebase';
+import { Home, BarChart2, Settings, Loader2 } from 'lucide-react';
+import { clsx } from 'clsx';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'stats' | 'settings'>('home');
+  const [user, setUser] = useState<User | null>(null);
+  const [hasLicense, setHasLicense] = useState<boolean>(false); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState('home');
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const licensed = await checkUserLicense();
+        setHasLicense(licensed);
+        
+        // Initialize notifications for logged-in users
+        initializeNotifications((payload) => {
+          console.log('Notification received:', payload);
+          // You can show a toast or update UI here
+        });
+      } else {
+        setHasLicense(false);
+      }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[#F4F4F0]">
+        <Loader2 className="animate-spin text-gray-400" size={32} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage onLogin={() => {}} />;
+  }
 
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-background overflow-hidden relative">
+    <div className="h-screen flex flex-col bg-background font-sans text-text-main">
+      <OfflineIndicator />
       
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'home' && <HomePage />}
-        {activeTab === 'stats' && <StatsPage />}
-        {activeTab === 'settings' && <SettingsPage />}
+      <div className="flex-1 overflow-hidden relative">
+        {currentPage === 'home' && (
+          <HomePage 
+            hasLicense={hasLicense} 
+            onLicenseVerified={() => setHasLicense(true)} 
+          />
+        )}
+        
+        {/* Stats and Settings are viewable by everyone, or you can restrict them too if you want */}
+        {currentPage === 'stats' && <StatsPage />}
+        {currentPage === 'settings' && <SettingsPage />}
       </div>
 
-      {/* Fixed Bottom Navigation */}
-      <nav className="bg-surface/90 backdrop-blur-md border-t border-gray-200 pb-6 pt-2 px-6 z-20">
-        <div className="flex justify-between items-center">
-          <NavButton 
-            icon={Home} 
-            isActive={activeTab === 'home'} 
-            onClick={() => setActiveTab('home')} 
-          />
-          <NavButton 
-            icon={BarChart2} 
-            isActive={activeTab === 'stats'} 
-            onClick={() => setActiveTab('stats')} 
-          />
-          <NavButton 
-            icon={Settings} 
-            isActive={activeTab === 'settings'} 
-            onClick={() => setActiveTab('settings')} 
-          />
+      <nav className="bg-white border-t border-gray-100 pb-safe pt-2 px-6 shadow-lg z-20">
+        <div className="flex justify-around items-center h-16">
+          <button onClick={() => setCurrentPage('home')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'home' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
+            <Home size={24} />
+          </button>
+          <button onClick={() => setCurrentPage('stats')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'stats' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
+            <BarChart2 size={24} />
+          </button>
+          <button onClick={() => setCurrentPage('settings')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'settings' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
+            <Settings size={24} />
+          </button>
         </div>
       </nav>
     </div>
   );
 }
-
-// Reusable Nav Component
-const NavButton = ({ icon: Icon, isActive, onClick }: { icon: any, isActive: boolean, onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className={clsx(
-      "p-3 rounded-xl transition-all duration-300", 
-      isActive ? "bg-primary/10 text-primary scale-110" : "text-gray-400 hover:text-gray-600"
-    )}
-  >
-    <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-  </button>
-);
 
 export default App;

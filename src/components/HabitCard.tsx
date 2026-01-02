@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, Circle, Activity, Book, Heart, Users, User, SkipForward } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion } from 'framer-motion';
@@ -11,19 +10,23 @@ const CATEGORY_STYLES = {
   Personal: { icon: User, color: 'text-teal-500', bg: 'bg-teal-100' },
 };
 
-// Add 'status' prop
 interface HabitCardProps {
   title: string;
   category: keyof typeof CATEGORY_STYLES;
   completed: boolean;
   onToggle: () => void;
-  onBodyClick?: () => void; // <--- New Prop
-  status?: 'done' | 'partial' | 'skipped'; // <--- New Prop
+  onBodyClick?: () => void;
+  status?: 'done' | 'partial' | 'skipped';
 }
 
-export const HabitCard: React.FC<HabitCardProps> = ({ 
-  title, category, completed, onToggle, onBodyClick, status 
-}) => {
+export const HabitCard = ({ 
+  title, 
+  category, 
+  completed, 
+  onToggle, 
+  onBodyClick, 
+  status 
+}: HabitCardProps) => {
   const Style = CATEGORY_STYLES[category] || CATEGORY_STYLES.Personal;
   const Icon = Style.icon;
 
