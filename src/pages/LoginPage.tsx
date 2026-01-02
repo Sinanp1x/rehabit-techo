@@ -23,7 +23,7 @@ export const LoginPage = ({ onLogin }: LoginPageProps) => {
       {/* Animated Logo */}
       <div className="bg-white p-6 rounded-3xl shadow-lg mb-8 animate-bounce-slow">
         <img 
-          src="/logo.png" 
+          src="/icon-512.png" 
           alt="Rehabit Techo Logo" 
           className="w-24 h-24 rounded-2xl"
         />
