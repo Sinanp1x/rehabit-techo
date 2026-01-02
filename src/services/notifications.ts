@@ -4,7 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { firestore, auth } from '../firebase';
 
 // Your VAPID key from Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
-const VAPID_KEY = 'YOUR_VAPID_KEY_HERE'; // TODO: Add your VAPID key
+const VAPID_KEY = 'ng7hzPaG7ZiOT9KjxLU1spkHj3VUgbMwLVR9Dm_TBo4'; // TODO: Add your VAPID key
 
 export interface NotificationPermissionState {
   granted: boolean;
