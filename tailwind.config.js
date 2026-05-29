@@ -7,20 +7,44 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "#F5F5F7", // Apple Light Gray
-        surface: "#FFFFFF",
-        primary: "#007AFF", // System Blue
+        background: "var(--color-background)",
+        surface: "var(--color-surface)",
+        card: "var(--color-card)",
+        border: "var(--color-border)",
+        primary: {
+          DEFAULT: "var(--color-primary)",
+          light: "var(--color-primary-light)",
+          dark: "var(--color-primary-dark)",
+        },
+        accent: {
+          purple: "#7C3AED",
+          blue: "#3B82F6",
+          teal: "#14B8A6",
+          pink: "#EC4899",
+          orange: "#F97316",
+          green: "#22C55E",
+        },
         text: {
-          main: "#1C1C1E",
-          sub: "#8E8E93"
-        }
+          main: "var(--color-text-main)",
+          sub: "var(--color-text-sub)",
+          muted: "var(--color-text-muted)",
+        },
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'San Francisco', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       padding: {
         'safe': 'env(safe-area-inset-bottom)',
         'safe-top': 'env(safe-area-inset-top)',
+      },
+      boxShadow: {
+        'glow': 'var(--shadow-glow)',
+        'glow-sm': 'var(--shadow-glow-sm)',
+        'card': 'var(--shadow-card)',
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-card': 'linear-gradient(135deg, var(--color-surface) 0%, var(--color-card) 100%)',
       },
     },
   },

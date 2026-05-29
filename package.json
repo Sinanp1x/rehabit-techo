@@ -1,7 +1,7 @@
 {
-  "name": "habit-tracker",
+  "name": "rehabit-echo",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,12 +16,15 @@
     "dexie-react-hooks": "^1.1.7",
     "firebase": "^12.7.0",
     "framer-motion": "^12.23.26",
+    "html-to-image": "^1.11.11",
     "lucide-react": "^0.562.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-is": "^19.2.6",
     "react-router-dom": "^7.11.0",
     "recharts": "^3.6.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^4.5.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -38,6 +41,8 @@
     "tailwindcss": "^3.4.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vite-plugin-pwa": "^1.0.0",
+    "workbox-window": "^7.3.0"
   }
 }

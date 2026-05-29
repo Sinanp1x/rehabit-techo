@@ -1,88 +1,162 @@
-import { useState, useEffect } from 'react';
-import { HomePage } from './pages/HomePage';
-import { StatsPage } from './pages/StatsPage';
-import { SettingsPage } from './pages/SettingsPage';
+// src/App.tsx — Main app with 5-tab navigation, auth, PWA setup
+import { useEffect, lazy, Suspense } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './firebase';
+import { useStore, type Page } from './store/useStore';
 import { LoginPage } from './pages/LoginPage';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { checkUserLicense } from './services/license'; 
-import { initializeNotifications } from './services/notifications';
+import { ToastContainer } from './components/ToastContainer';
 import { migrateExistingData } from './utils/migration';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from './firebase';
-import { Home, BarChart2, Settings, Loader2 } from 'lucide-react';
+import { syncData } from './services/sync';
+import { scheduleAllReminders } from './services/notifications';
+import { Home, BarChart2, Users, Image, Settings, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Lazy-loaded pages for code splitting
+const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
+const StatsPage = lazy(() => import('./pages/StatsPage').then((m) => ({ default: m.StatsPage })));
+const FriendsPage = lazy(() => import('./pages/FriendsPage').then((m) => ({ default: m.FriendsPage })));
+const PublicPodiumPage = lazy(() => import('./pages/PublicPodiumPage').then((m) => ({ default: m.PublicPodiumPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
+
+const NAV_ITEMS: { page: Page; icon: React.ReactNode; label: string }[] = [
+  { page: 'home', icon: <Home size={22} />, label: 'Today' },
+  { page: 'stats', icon: <BarChart2 size={22} />, label: 'Stats' },
+  { page: 'friends', icon: <Users size={22} />, label: 'Friends' },
+  { page: 'podium', icon: <Image size={22} />, label: 'Podium' },
+  { page: 'settings', icon: <Settings size={22} />, label: 'Settings' },
+];
+
+const PageFallback = () => (
+  <div className="h-full flex items-center justify-center bg-background">
+    <Loader2 size={28} className="animate-spin text-primary" />
+  </div>
+);
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [hasLicense, setHasLicense] = useState<boolean>(false); 
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('home');
+  const { user, isAuthLoading, setUser, setAuthLoading, currentPage, setPage } = useStore();
 
+  // ── Auth listener ────────────────────────────
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Migrate existing data to add userId
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
         await migrateExistingData();
-        
-        const licensed = await checkUserLicense();
-        setHasLicense(licensed);
-        
-        // Initialize notifications for logged-in users
-        initializeNotifications((payload) => {
-          console.log('Notification received:', payload);
-          // You can show a toast or update UI here
-        });
-      } else {
-        setHasLicense(false);
+        syncData();
+        const dndStart = localStorage.getItem('dndEnabled') === 'true'
+          ? localStorage.getItem('dndStart') ?? null : null;
+        const dndEnd = localStorage.getItem('dndEnabled') === 'true'
+          ? localStorage.getItem('dndEnd') ?? null : null;
+        scheduleAllReminders(dndStart, dndEnd);
       }
-      setIsLoading(false);
+      setAuthLoading(false);
     });
-    return () => unsubscribe();
+    return () => unsub();
+  }, [setUser, setAuthLoading]);
+
+  // ── Battery API ──────────────────────────────
+  useEffect(() => {
+    const { setBatteryMode } = useStore.getState();
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        setBatteryMode(battery.level < 0.2 && !battery.charging);
+        battery.addEventListener('levelchange', () => {
+          setBatteryMode(battery.level < 0.2 && !battery.charging);
+        });
+      });
+    }
   }, []);
 
-  if (isLoading) {
+  // ── Theme Initialization ──────────────────────
+  useEffect(() => {
+    const { theme, setTheme } = useStore.getState();
+    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    if (storedTheme) {
+      setTheme(storedTheme);
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setTheme(prefersDark ? 'dark' : 'light');
+    }
+  }, []);
+
+  // ── Loading ──────────────────────────────────
+  if (isAuthLoading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#F4F4F0]">
-        <Loader2 className="animate-spin text-gray-400" size={32} />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-background gap-4">
+        <div className="w-16 h-16 bg-surface flex items-center justify-center shadow-glow overflow-hidden rounded-3xl select-none">
+          <img src="/logo.svg" alt="Rehabit Techo Logo" className="w-full h-full object-contain" />
+        </div>
+        <Loader2 size={24} className="animate-spin text-primary" />
       </div>
     );
   }
 
-  if (!user) {
-    return <LoginPage onLogin={() => {}} />;
-  }
+  // ── Auth gate ────────────────────────────────
+  if (!user && currentPage !== 'privacy') return <LoginPage />;
 
   return (
-    <div className="h-screen flex flex-col bg-background font-sans text-text-main">
+    <div className="h-screen flex flex-col bg-background font-sans text-text-main overflow-hidden">
       <OfflineIndicator />
-      
+      <ToastContainer />
+
+      {/* Page content */}
       <div className="flex-1 overflow-hidden relative">
-        {currentPage === 'home' && (
-          <HomePage 
-            hasLicense={hasLicense} 
-            onLicenseVerified={() => setHasLicense(true)} 
-          />
-        )}
-        
-        {/* Stats and Settings are viewable by everyone, or you can restrict them too if you want */}
-        {currentPage === 'stats' && <StatsPage />}
-        {currentPage === 'settings' && <SettingsPage />}
+        <Suspense fallback={<PageFallback />}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="absolute inset-0"
+            >
+              {currentPage === 'home' && <HomePage />}
+              {currentPage === 'stats' && <StatsPage />}
+              {currentPage === 'friends' && <FriendsPage />}
+              {currentPage === 'podium' && <PublicPodiumPage />}
+              {currentPage === 'settings' && <SettingsPage />}
+              {currentPage === 'privacy' && <PrivacyPage />}
+            </motion.div>
+          </AnimatePresence>
+        </Suspense>
       </div>
 
-      <nav className="bg-white border-t border-gray-100 pb-safe pt-2 px-6 shadow-lg z-20">
-        <div className="flex justify-around items-center h-16">
-          <button onClick={() => setCurrentPage('home')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'home' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
-            <Home size={24} />
-          </button>
-          <button onClick={() => setCurrentPage('stats')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'stats' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
-            <BarChart2 size={24} />
-          </button>
-          <button onClick={() => setCurrentPage('settings')} className={clsx("p-2 rounded-xl transition-all duration-300", currentPage === 'settings' ? "bg-black text-white shadow-md scale-110" : "text-gray-400 hover:bg-gray-50")}>
-            <Settings size={24} />
-          </button>
-        </div>
-      </nav>
+      {/* Bottom Navigation */}
+      {user && (
+        <nav className="shrink-0 bg-surface border-t border-border pb-safe pt-2 px-2 z-20">
+          <div className="flex justify-around items-center h-16">
+            {NAV_ITEMS.map(({ page, icon, label }) => {
+              const isActive = currentPage === page;
+              return (
+                <button
+                  key={page}
+                  onClick={() => setPage(page)}
+                  className={clsx(
+                    'flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all duration-200',
+                    isActive ? 'text-primary' : 'text-text-muted hover:text-text-sub',
+                  )}
+                >
+                  <div className={clsx(
+                    'p-2 rounded-xl transition-all duration-200',
+                    isActive ? 'bg-primary/15 shadow-glow-sm' : '',
+                  )}>
+                    {icon}
+                  </div>
+                  <span className={clsx(
+                    'text-[10px] font-bold transition-all',
+                    isActive ? 'text-primary' : 'text-text-muted',
+                  )}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

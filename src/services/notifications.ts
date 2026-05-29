@@ -1,10 +1,6 @@
-import { getMessagingInstance } from '../firebase';
-import { getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc } from 'firebase/firestore';
-import { firestore, auth } from '../firebase';
-
-// Your VAPID key from Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
-const VAPID_KEY = 'ng7hzPaG7ZiOT9KjxLU1spkHj3VUgbMwLVR9Dm_TBo4'; // TODO: Add your VAPID key
+// src/services/notifications.ts — Robust habit reminder scheduler
+import { db } from '../db';
+import { format, addDays } from 'date-fns';
 
 export interface NotificationPermissionState {
   granted: boolean;
@@ -12,196 +8,122 @@ export interface NotificationPermissionState {
   default: boolean;
 }
 
-/**
- * Check if notifications are supported in this browser
- */
-export const areNotificationsSupported = (): boolean => {
-  return 'Notification' in window && 'serviceWorker' in navigator;
-};
+// ─────────────────────────────────────────────
+// Permission Helpers
+// ─────────────────────────────────────────────
 
-/**
- * Get current notification permission state
- */
+export const areNotificationsSupported = (): boolean =>
+  'Notification' in window && 'serviceWorker' in navigator;
+
 export const getNotificationPermission = (): NotificationPermissionState => {
-  if (!areNotificationsSupported()) {
+  if (!areNotificationsSupported())
     return { granted: false, denied: true, default: false };
-  }
-
-  const permission = Notification.permission;
-  return {
-    granted: permission === 'granted',
-    denied: permission === 'denied',
-    default: permission === 'default',
-  };
+  const p = Notification.permission;
+  return { granted: p === 'granted', denied: p === 'denied', default: p === 'default' };
 };
 
-/**
- * Request notification permission from the user
- */
 export const requestNotificationPermission = async (): Promise<boolean> => {
-  if (!areNotificationsSupported()) {
-    console.warn('Notifications not supported');
-    return false;
-  }
-
+  if (!areNotificationsSupported()) return false;
   try {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
-  } catch (error) {
-    console.error('Error requesting notification permission:', error);
+    return (await Notification.requestPermission()) === 'granted';
+  } catch {
     return false;
   }
 };
 
-/**
- * Get FCM token and save it to Firestore
- */
-export const getFCMToken = async (): Promise<string | null> => {
-  const messaging = getMessagingInstance();
-  if (!messaging) {
-    console.warn('Firebase Messaging not available');
-    return null;
-  }
+// ─────────────────────────────────────────────
+// Do Not Disturb
+// ─────────────────────────────────────────────
 
-  try {
-    const currentToken = await getToken(messaging, {
-      vapidKey: VAPID_KEY,
-    });
-
-    if (currentToken) {
-      console.log('FCM Token obtained:', currentToken);
-      
-      // Save token to Firestore for the current user
-      const user = auth.currentUser;
-      if (user) {
-        await setDoc(
-          doc(firestore, 'users', user.uid),
-          {
-            fcmToken: currentToken,
-            notificationsEnabled: true,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      }
-
-      return currentToken;
-    } else {
-      console.log('No registration token available');
-      return null;
-    }
-  } catch (error) {
-    console.error('Error getting FCM token:', error);
-    return null;
-  }
-};
-
-/**
- * Initialize FCM and set up foreground message handler
- */
-export const initializeNotifications = async (
-  onMessageReceived?: (payload: any) => void
-): Promise<void> => {
-  const messaging = getMessagingInstance();
-  if (!messaging) {
-    return;
-  }
-
-  // Handle foreground messages
-  onMessage(messaging, (payload) => {
-    console.log('Message received in foreground:', payload);
-
-    if (onMessageReceived) {
-      onMessageReceived(payload);
-    }
-
-    // Show notification manually when app is in foreground
-    if (payload.notification) {
-      const { title, body, icon } = payload.notification;
-      
-      if (Notification.permission === 'granted') {
-        new Notification(title || 'Habit Reminder', {
-          body: body || 'Time to complete your habit!',
-          icon: icon || '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: 'habit-reminder',
-          requireInteraction: true,
-        });
-      }
-    }
-  });
-};
-
-/**
- * Schedule a local notification (for habits with specific times)
- * Note: This is a client-side implementation. For production, use a backend service.
- */
-export const scheduleHabitNotification = (
-  habitTitle: string,
-  habitTime: string // "HH:mm" format
-): void => {
-  if (!areNotificationsSupported() || Notification.permission !== 'granted') {
-    return;
-  }
-
-  const [hours, minutes] = habitTime.split(':').map(Number);
+function isInDnDWindow(start: string | null, end: string | null): boolean {
+  if (!start || !end) return false;
   const now = new Date();
-  const scheduledTime = new Date();
-  scheduledTime.setHours(hours, minutes, 0, 0);
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const startMin = sh * 60 + sm;
+  const endMin = eh * 60 + em;
+  // Handle overnight DnD (e.g., 22:00–07:00)
+  if (startMin <= endMin) return nowMin >= startMin && nowMin <= endMin;
+  return nowMin >= startMin || nowMin <= endMin;
+}
 
-  // If time has passed today, schedule for tomorrow
-  if (scheduledTime <= now) {
-    scheduledTime.setDate(scheduledTime.getDate() + 1);
+// ─────────────────────────────────────────────
+// Schedule reminders (stored in IndexedDB, fired by setTimeout)
+// ─────────────────────────────────────────────
+
+let activeTimers: Map<number, ReturnType<typeof setTimeout>> = new Map();
+
+export const scheduleAllReminders = async (
+  dndStart: string | null = null,
+  dndEnd: string | null = null,
+): Promise<void> => {
+  // Clear previous timers
+  activeTimers.forEach((timer) => clearTimeout(timer));
+  activeTimers.clear();
+  await db.scheduledReminders.clear();
+
+  if (Notification.permission !== 'granted') return;
+
+  const habits = await db.habits.filter((h) => !h.archived && h.notificationsEnabled).toArray();
+  const now = new Date();
+
+  for (const habit of habits) {
+    const allTimes = [habit.hasTime ? habit.time : null, ...habit.reminders].filter(
+      Boolean,
+    ) as string[];
+
+    for (const time of allTimes) {
+      const [h, m] = time.split(':').map(Number);
+      const fireTime = new Date();
+      fireTime.setHours(h, m, 0, 0);
+
+      // If already past, schedule for tomorrow
+      if (fireTime <= now) fireTime.setDate(fireTime.getDate() + 1);
+
+      const delay = fireTime.getTime() - now.getTime();
+
+      // Store in IDB for persistence across page reloads
+      const remId = (await db.scheduledReminders.add({
+        habitId: habit.id!,
+        habitTitle: habit.title,
+        time,
+        nextFire: fireTime.getTime(),
+      })) as number;
+
+      const timerId = setTimeout(async () => {
+        if (!isInDnDWindow(dndStart, dndEnd)) {
+          fireNotification(habit.title, time);
+        }
+        // Re-schedule for the next day
+        await db.scheduledReminders.delete(remId);
+        scheduleAllReminders(dndStart, dndEnd);
+      }, delay);
+
+      activeTimers.set(remId, timerId);
+    }
   }
-
-  const delay = scheduledTime.getTime() - now.getTime();
-
-  // Schedule notification
-  setTimeout(() => {
-    new Notification('Habit Reminder', {
-      body: `Time to: ${habitTitle}`,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: `habit-${habitTitle}`,
-      requireInteraction: false,
-    });
-  }, delay);
 };
 
-/**
- * Show an immediate test notification
- */
-export const showTestNotification = (): void => {
-  if (!areNotificationsSupported()) {
-    alert('Notifications not supported in this browser');
-    return;
-  }
-
-  if (Notification.permission !== 'granted') {
-    alert('Please grant notification permission first');
-    return;
-  }
-
-  new Notification('Test Notification', {
-    body: 'Your habit reminders will look like this! 🎉',
+function fireNotification(habitTitle: string, time: string): void {
+  if (Notification.permission !== 'granted') return;
+  new Notification('⏰ Rehabit Techo', {
+    body: `Time to: ${habitTitle}`,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
+    tag: `habit-${habitTitle}-${time}`,
+    requireInteraction: false,
   });
-};
+}
 
-/**
- * Disable notifications for the user
- */
-export const disableNotifications = async (): Promise<void> => {
-  const user = auth.currentUser;
-  if (user) {
-    await setDoc(
-      doc(firestore, 'users', user.uid),
-      {
-        notificationsEnabled: false,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-  }
+// ─────────────────────────────────────────────
+// Test notification
+// ─────────────────────────────────────────────
+
+export const showTestNotification = (): void => {
+  if (!areNotificationsSupported() || Notification.permission !== 'granted') return;
+  new Notification('🎉 Rehabit Techo', {
+    body: 'Notifications are working! Your habit reminders will look like this.',
+    icon: '/icon-192.png',
+  });
 };

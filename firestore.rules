@@ -1,33 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- 1. USER PROFILES ---
-    // Allow users to access only their own document
+
+    // ── User profiles (friend code, settings) ──────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // --- 2. LICENSE KEYS ---
-    match /license_keys/{keyId} {
-      // Allow reading keys to check validity
+      // Only the owner can write; friends can read for code lookup
       allow read: if request.auth != null;
-      
-      // Allow updating keys (to mark them as 'claimed')
-      allow update: if request.auth != null;
-      
-      // Block users from creating new keys or deleting existing ones
-      allow create, delete: if false;
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      // ── Habits (private) ─────────────────────────────────
+      match /habits/{habitId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // ── Logs (private) ───────────────────────────────────
+      match /logs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // ── Public stats (opt-in, read by any authenticated user) ─
+      match /public_stats/{statDoc} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
     }
-    
-    // --- 3. HABITS ---
-    match /users/{userId}/habits/{habitId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // --- 4. LOGS ---
-    match /users/{userId}/logs/{logId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // ── Friend requests (global collection) ─────────────────
+    match /friend_requests/{reqId} {
+      // Sender or recipient can read
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.fromUid
+         || request.auth.uid == resource.data.toUid);
+
+      // Only the sender can create
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.fromUid;
+
+      // Only the recipient can update status
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.toUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+
+      // No deletion
+      allow delete: if false;
     }
   }
 }

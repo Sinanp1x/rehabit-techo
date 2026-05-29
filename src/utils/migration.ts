@@ -1,52 +1,57 @@
-// Migration utility to add userId to existing habits and logs
-import { db } from "../db";
-import { auth } from "../firebase";
+// src/utils/migration.ts — Migrate old DB schema data to v5
+import { db } from '../db';
+import { auth } from '../firebase';
 
-export const migrateExistingData = async () => {
+export const migrateExistingData = async (): Promise<void> => {
   const user = auth.currentUser;
-  if (!user) {
-    console.log("⚠️ Migration skipped: No user logged in");
-    return;
-  }
+  if (!user) return;
 
   try {
-    // Get all habits without userId
     const allHabits = await db.habits.toArray();
-    const habitsToUpdate = allHabits.filter(h => !h.userId);
-    
-    // Get all logs without userId
+    let migrated = 0;
+
+    for (const habit of allHabits) {
+      const updates: Partial<typeof habit> = {};
+
+      // Add userId if missing
+      if (!habit.userId) updates.userId = user.uid;
+
+      // Migrate single category → tags array
+      if (!habit.tags || habit.tags.length === 0) {
+        const cat = (habit as any).category;
+        updates.tags = cat ? [cat] : ['General'];
+      }
+
+      // Add missing fields with defaults
+      if (habit.reminders === undefined) updates.reminders = [];
+      if (habit.notificationsEnabled === undefined)
+        updates.notificationsEnabled = habit.hasTime ?? false;
+      if (habit.quantity === undefined) updates.quantity = null;
+      if (!habit.createdAt) updates.createdAt = new Date().toISOString();
+
+      if (Object.keys(updates).length > 0) {
+        await db.habits.update(habit.id!, { ...updates, syncStatus: 'pending' });
+        migrated++;
+      }
+    }
+
     const allLogs = await db.logs.toArray();
-    const logsToUpdate = allLogs.filter(l => !l.userId);
-    
-    if (habitsToUpdate.length === 0 && logsToUpdate.length === 0) {
-      console.log("✅ No data needs migration");
-      return;
-    }
-
-    console.log(`🔄 Migrating ${habitsToUpdate.length} habits and ${logsToUpdate.length} logs...`);
-
-    // Update habits with userId
-    for (const habit of habitsToUpdate) {
-      if (habit.id) {
-        await db.habits.update(habit.id, {
-          userId: user.uid,
-          syncStatus: 'pending' // Mark for re-sync
-        });
+    for (const log of allLogs) {
+      const updates: Partial<typeof log> = {};
+      if (!log.userId) updates.userId = user.uid;
+      if (log.skipReason === undefined) updates.skipReason = null;
+      if (log.partialValue === undefined) updates.partialValue = null;
+      if ((log.status as string) !== 'done' && (log.status as string) !== 'partial' && (log.status as string) !== 'skip')
+        updates.status = 'done';
+      if (Object.keys(updates).length > 0) {
+        await db.logs.update(log.id!, { ...updates, syncStatus: 'pending' });
       }
     }
 
-    // Update logs with userId
-    for (const log of logsToUpdate) {
-      if (log.id) {
-        await db.logs.update(log.id, {
-          userId: user.uid,
-          syncStatus: 'pending' // Mark for re-sync
-        });
-      }
+    if (migrated > 0) {
+      console.log(`✅ Migrated ${migrated} habits to v5 schema`);
     }
-
-    console.log("✅ Migration completed successfully!");
   } catch (error) {
-    console.error("❌ Migration failed:", error);
+    console.error('Migration failed:', error);
   }
 };
