@@ -8,6 +8,8 @@
 [![PWA](https://img.shields.io/badge/PWA-Ready-green.svg)](#pwa)
 
 ---
+[Now Live ON](https://rehabitecho.p1xion.app)
+---
 
 ## ✨ Features
 
