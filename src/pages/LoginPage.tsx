@@ -61,9 +61,9 @@ export const LoginPage = () => {
         className="text-center mb-10"
       >
         <div className="w-20 h-20 bg-surface flex items-center justify-center mx-auto mb-4 shadow-glow overflow-hidden select-none">
-          <img src="/logo.svg" alt="Rehabit Techo Logo" className="w-full h-full object-contain" />
+          <img src="/logo.svg" alt="Rehabi Techo Logo" className="w-full h-full object-contain" />
         </div>
-        <h1 className="text-4xl font-black gradient-text">Rehabit Techo</h1>
+        <h1 className="text-4xl font-black gradient-text">Rehabi Techo</h1>
         <p className="text-text-sub text-sm mt-2">Privacy-first habit tracker</p>
       </motion.div>
 

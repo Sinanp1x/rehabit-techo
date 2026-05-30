@@ -11,6 +11,7 @@ export interface Habit {
   title: string;
   tags: string[];           // Multi-tag (Health, Study, Spiritual, Family, Personal, custom)
   color: string;
+  icon?: string;            // Selected category/icon name
   type: 'habit' | 'reminder';
   hasTime: boolean;
   time: string;             // Primary reminder "HH:mm"
@@ -22,6 +23,7 @@ export interface Habit {
   archived: boolean;
   syncStatus: 'pending' | 'synced';
   createdAt: string;        // ISO date
+  updatedAt?: number;
 }
 
 export type LogStatus = 'done' | 'partial' | 'skip';
@@ -35,6 +37,7 @@ export interface HabitLog {
   skipReason: string | null; // 'sick' | 'vacation' | 'other' | null
   partialValue: number | null; // 0–100 percentage OR raw quantity
   syncStatus: 'pending' | 'synced';
+  updatedAt?: number;
 }
 
 export interface PendingWrite {

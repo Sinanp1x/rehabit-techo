@@ -11,6 +11,7 @@ import {
 import { clsx } from 'clsx';
 import { useStore } from '../store/useStore';
 import { syncData, syncProfile } from '../services/sync';
+import { startRealtimeSync } from '../services/realtimeSync';
 import { exportAllData, importFromFile, getStorageUsageMB } from '../utils/export';
 import {
   areNotificationsSupported,
@@ -138,6 +139,7 @@ export const SettingsPage = () => {
       setE2EERecoveryCode(recovery);
 
       await syncProfile({ e2eeEnabled: true });
+      await startRealtimeSync();
       setE2eeSection('recovery');
       setMasterPassword('');
       setConfirmPassword('');
@@ -163,6 +165,7 @@ export const SettingsPage = () => {
       setE2EEKey(key);
       setE2EESalt(salt);
       setE2EEVerifier(verifier);
+      await startRealtimeSync();
       setE2eeSection('enabled');
       addToast('E2EE unlocked for this session', 'success');
     } catch {
@@ -504,9 +507,9 @@ export const SettingsPage = () => {
               Privacy Policy
             </button>
             <span className="text-text-muted text-xs">•</span>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+            <a href="https://rehabitecho.p1xion.app" target="_blank" rel="noopener noreferrer"
               className="text-xs text-primary hover:underline font-semibold">
-              View on GitHub
+              Visit Website
             </a>
           </div>
 
@@ -518,7 +521,7 @@ export const SettingsPage = () => {
             </div>
           </div>
 
-          <p className="text-[10px] text-text-muted mt-2">Rehabit Techo v2.0 · MIT License · Open Source</p>
+          <p className="text-[10px] text-text-muted mt-2">Rehabi Techo v2.5.0 · MIT License · Open Source</p>
         </div>
       </div>
     </div>

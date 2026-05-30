@@ -1,7 +1,20 @@
 // src/components/HabitCard.tsx — Premium dark habit card with streak display
 import { clsx } from 'clsx';
-import { Flame, Clock, Bell, BellOff, CheckCircle2, MinusCircle, SkipForward } from 'lucide-react';
+import { Flame, Clock, Bell, BellOff, CheckCircle2, MinusCircle, SkipForward, Sparkles, Dumbbell, BookOpen, Notebook, Droplet, Brain } from 'lucide-react';
 import type { HabitWithStatus } from '../hooks/useHabits';
+
+const getHabitIcon = (iconName?: string) => {
+  switch (iconName) {
+    case 'spiritual': return <Sparkles size={18} className="text-white" />;
+    case 'exercise': return <Dumbbell size={18} className="text-white" />;
+    case 'book': return <BookOpen size={18} className="text-white" />;
+    case 'journal': return <Notebook size={18} className="text-white" />;
+    case 'hydration': return <Droplet size={18} className="text-white" />;
+    case 'deepwork': return <Clock size={18} className="text-white" />;
+    case 'meditation': return <Brain size={18} className="text-white" />;
+    default: return null;
+  }
+};
 
 interface HabitCardProps {
   habit: HabitWithStatus;
@@ -25,14 +38,23 @@ export const HabitCard = ({ habit, onClick }: HabitCardProps) => {
         'bg-card border-border hover:border-primary/30 hover:bg-surface',
       )}
     >
-      {/* Color accent bar */}
+      {/* Color accent bar or Icon */}
       {habit.type === 'habit' ? (
-        <div
-          className="w-1 h-12 rounded-full shrink-0"
-          style={{ backgroundColor: habit.color }}
-        />
+        getHabitIcon(habit.icon) ? (
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+            style={{ backgroundColor: habit.color }}
+          >
+            {getHabitIcon(habit.icon)}
+          </div>
+        ) : (
+          <div
+            className="w-1 h-12 rounded-full shrink-0"
+            style={{ backgroundColor: habit.color }}
+          />
+        )
       ) : (
-        <div className="w-9 h-9 rounded-full bg-surface flex items-center justify-center shrink-0 border border-border">
+        <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center shrink-0 border border-border">
           <Bell size={16} className="text-text-sub" />
         </div>
       )}

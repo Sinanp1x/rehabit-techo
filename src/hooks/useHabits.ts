@@ -1,10 +1,11 @@
 // src/hooks/useHabits.ts — Upgraded hook with partial/skip support and streak data
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Habit, type LogStatus } from '../db';
-import { format, getDay } from 'date-fns';
+import { format, getDay, startOfMonth } from 'date-fns';
 import { syncData } from '../services/sync';
 import { auth } from '../firebase';
 import { getCurrentStreak, getLongestStreak } from '../utils/stats';
+import { useStore } from '../store/useStore';
 
 export interface HabitWithStatus extends Habit {
   isScheduledToday: boolean;
@@ -17,8 +18,10 @@ export interface HabitWithStatus extends Habit {
 export const useHabits = () => {
   const todayDateStr = format(new Date(), 'yyyy-MM-dd');
   const todayDayIndex = getDay(new Date());
+  const currentMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
   const user = auth.currentUser;
   const userId = user?.uid;
+  const { addToast } = useStore();
 
   const allHabits = useLiveQuery(
     () => (userId ? db.habits.filter((h) => !h.archived && h.userId === userId).toArray() : []),
@@ -26,7 +29,7 @@ export const useHabits = () => {
   );
 
   const allLogs = useLiveQuery(
-    () => (userId ? db.logs.where({ userId }).toArray() : []),
+    () => (userId ? db.logs.where('userId').equals(userId).and((log) => log.date >= currentMonthStart).toArray() : []),
     [userId],
   );
 
@@ -60,13 +63,18 @@ export const useHabits = () => {
   const addHabit = async (data: Omit<Habit, 'id' | 'userId' | 'archived' | 'syncStatus'>) => {
     const user = auth.currentUser;
     if (!user) return;
-    await db.habits.add({
+    const tempId = await db.habits.add({
       ...data,
       userId: user.uid,
       archived: false,
       syncStatus: 'pending',
+      updatedAt: Date.now(),
     });
-    syncData();
+    const synced = await syncData();
+    if (synced === false) {
+      await db.habits.delete(tempId);
+      addToast('Habit save failed. Local change was rolled back.', 'error');
+    }
   };
 
   // ── Log Habit (done / partial / skip) ─────────
@@ -81,6 +89,7 @@ export const useHabits = () => {
 
     const existing = await db.logs.where({ habitId, date: todayDateStr }).first();
     if (existing) {
+      const previous = { ...existing };
       if (existing.status === status) {
         // Toggle off — remove the log
         await db.logs.delete(existing.id!);
@@ -91,20 +100,44 @@ export const useHabits = () => {
           skipReason: options?.skipReason ?? null,
           partialValue: options?.partialValue ?? null,
           syncStatus: 'pending',
+          updatedAt: Date.now(),
         });
       }
+      const synced = await syncData();
+      if (synced === false) {
+        if (existing.status === status) {
+          await db.logs.put(previous);
+        } else {
+          await db.logs.put({
+            ...previous,
+            status,
+            skipReason: options?.skipReason ?? null,
+            partialValue: options?.partialValue ?? null,
+            syncStatus: 'pending',
+            updatedAt: Date.now(),
+          });
+        }
+        addToast('Log save failed. Local change was rolled back.', 'error');
+      }
     } else {
-      await db.logs.add({
+      const newLog = {
         userId: user.uid,
         habitId,
         date: todayDateStr,
         status,
         skipReason: options?.skipReason ?? null,
         partialValue: options?.partialValue ?? null,
-        syncStatus: 'pending',
-      });
+        syncStatus: 'pending' as const,
+        updatedAt: Date.now(),
+      };
+      // Capture the returned id for a deterministic rollback — no secondary query
+      const newId = await db.logs.add({ ...newLog });
+      const synced = await syncData();
+      if (synced === false) {
+        await db.logs.delete(newId);
+        addToast('Log save failed. Local change was rolled back.', 'error');
+      }
     }
-    syncData();
   };
 
   // ── Legacy toggle (backwards compat) ──────────
@@ -114,15 +147,25 @@ export const useHabits = () => {
   // ── Update Habit ───────────────────────────────
 
   const updateHabit = async (id: number, updates: Partial<Habit>) => {
-    await db.habits.update(id, { ...updates, syncStatus: 'pending' });
-    syncData();
+    const previous = await db.habits.get(id);
+    await db.habits.update(id, { ...updates, syncStatus: 'pending', updatedAt: Date.now() });
+    const synced = await syncData();
+    if (synced === false && previous) {
+      await db.habits.put(previous);
+      addToast('Habit update failed. Local change was rolled back.', 'error');
+    }
   };
 
   // ── Delete Habit ───────────────────────────────
 
   const deleteHabit = async (id: number) => {
-    await db.habits.update(id, { archived: true, syncStatus: 'pending' });
-    syncData();
+    const previous = await db.habits.get(id);
+    await db.habits.update(id, { archived: true, syncStatus: 'pending', updatedAt: Date.now() });
+    const synced = await syncData();
+    if (synced === false && previous) {
+      await db.habits.put(previous);
+      addToast('Habit delete failed. Local change was rolled back.', 'error');
+    }
   };
 
   return {

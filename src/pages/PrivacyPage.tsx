@@ -26,7 +26,7 @@ export const PrivacyPage = () => {
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 max-w-2xl mx-auto">
         <section className="space-y-3">
           <p className="text-sm text-text-sub leading-relaxed">
-            Welcome to <strong className="text-text-main">Rehabit Techo</strong>. Your privacy is our highest priority. We are committed to building a completely transparent, local-first, privacy-respecting tool where you own your personal habits data.
+            Welcome to <strong className="text-text-main">Rehabi Techo</strong>. Your privacy is our highest priority. We are committed to building a completely transparent, local-first, privacy-respecting tool where you own your personal habits data.
           </p>
           <p className="text-sm text-text-sub leading-relaxed">
             Unlike traditional tracking tools, we operate under a <strong className="text-text-main">Zero-Knowledge design</strong>. This means we design systems so that we cannot read your habits or track your personal schedules even if we wanted to.

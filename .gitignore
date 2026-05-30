@@ -12,6 +12,7 @@ node_modules
 dist-ssr
 *.local
 /dist
+.env
 
 # DO NOT ignore package-lock.json so your CI/CD builds don't break!
 # package-lock.json 

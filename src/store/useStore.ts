@@ -54,6 +54,13 @@ interface AppState {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   setTheme: (theme: 'light' | 'dark') => void;
+
+  // Realtime sync
+  realtimeLoading: boolean;
+  realtimeReady: boolean;
+  realtimeError: string | null;
+  lastRealtimeSyncAt: number | null;
+  setRealtimeStatus: (status: Partial<Pick<AppState, 'realtimeLoading' | 'realtimeReady' | 'realtimeError' | 'lastRealtimeSyncAt'>>) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -119,4 +126,16 @@ export const useStore = create<AppState>((set, get) => ({
     localStorage.setItem('theme', theme);
     document.documentElement.setAttribute('data-theme', theme);
   },
+
+  // Realtime sync
+  realtimeLoading: true,
+  realtimeReady: false,
+  realtimeError: null,
+  lastRealtimeSyncAt: null,
+  setRealtimeStatus: (status) => set((s) => ({
+    realtimeLoading: status.realtimeLoading ?? s.realtimeLoading,
+    realtimeReady: status.realtimeReady ?? s.realtimeReady,
+    realtimeError: status.realtimeError ?? s.realtimeError,
+    lastRealtimeSyncAt: status.lastRealtimeSyncAt ?? s.lastRealtimeSyncAt,
+  })),
 }));

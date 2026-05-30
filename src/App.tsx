@@ -8,6 +8,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { ToastContainer } from './components/ToastContainer';
 import { migrateExistingData } from './utils/migration';
 import { syncData } from './services/sync';
+import { startRealtimeSync, stopRealtimeSync } from './services/realtimeSync';
 import { scheduleAllReminders } from './services/notifications';
 import { Home, BarChart2, Users, Image, Settings, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -44,12 +45,15 @@ function App() {
       setUser(firebaseUser);
       if (firebaseUser) {
         await migrateExistingData();
+        await startRealtimeSync();
         syncData();
         const dndStart = localStorage.getItem('dndEnabled') === 'true'
           ? localStorage.getItem('dndStart') ?? null : null;
         const dndEnd = localStorage.getItem('dndEnabled') === 'true'
           ? localStorage.getItem('dndEnd') ?? null : null;
         scheduleAllReminders(dndStart, dndEnd);
+      } else {
+        stopRealtimeSync();
       }
       setAuthLoading(false);
     });
@@ -86,7 +90,7 @@ function App() {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-background gap-4">
         <div className="w-16 h-16 bg-surface flex items-center justify-center shadow-glow overflow-hidden rounded-3xl select-none">
-          <img src="/logo.svg" alt="Rehabit Techo Logo" className="w-full h-full object-contain" />
+          <img src="/logo.svg" alt="Rehabi Techo Logo" className="w-full h-full object-contain" />
         </div>
         <Loader2 size={24} className="animate-spin text-primary" />
       </div>

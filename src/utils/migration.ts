@@ -30,7 +30,7 @@ export const migrateExistingData = async (): Promise<void> => {
       if (!habit.createdAt) updates.createdAt = new Date().toISOString();
 
       if (Object.keys(updates).length > 0) {
-        await db.habits.update(habit.id!, { ...updates, syncStatus: 'pending' });
+        await db.habits.update(habit.id!, { ...updates, syncStatus: 'pending', updatedAt: Date.now() });
         migrated++;
       }
     }
@@ -44,7 +44,7 @@ export const migrateExistingData = async (): Promise<void> => {
       if ((log.status as string) !== 'done' && (log.status as string) !== 'partial' && (log.status as string) !== 'skip')
         updates.status = 'done';
       if (Object.keys(updates).length > 0) {
-        await db.logs.update(log.id!, { ...updates, syncStatus: 'pending' });
+        await db.logs.update(log.id!, { ...updates, syncStatus: 'pending', updatedAt: Date.now() });
       }
     }
 

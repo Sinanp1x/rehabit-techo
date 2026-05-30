@@ -1,6 +1,6 @@
 # Push Notifications Setup Guide
 
-This guide explains how to set up push notifications for habit reminders in the Rehabit Techo app.
+This guide explains how to set up push notifications for habit reminders in the Rehabi Techo app.
 
 ## Prerequisites
 

@@ -1,4 +1,4 @@
-# Rehabit Techo (手帳)
+# Rehabi Techo (手帳)
 
 > **Privacy-first, open-source habit tracker** with End-to-End Encryption, social leaderboards, and PWA support.
 
@@ -48,8 +48,8 @@
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/your-repo/rehabit-echo.git
-cd rehabit-echo
+git clone https://github.com/your-repo/rehabi-techo.git
+cd rehabi-techo
 npm install
 ```
 
@@ -153,4 +153,4 @@ Please keep the open-source spirit — no license gating, no paywalls.
 
 ## 📄 License
 
-MIT © Rehabit Echo Contributors — see [LICENSE](LICENSE)
+MIT © Rehabi Techo Contributors — see [LICENSE](LICENSE)

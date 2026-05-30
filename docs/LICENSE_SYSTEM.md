@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Rehabit Techo app includes a built-in license verification system to control access to premium features. Users must activate their account with a valid license key to add new habits.
+The Rehabi Techo app includes a built-in license verification system to control access to premium features. Users must activate their account with a valid license key to add new habits.
 
 ## How It Works
 
@@ -173,7 +173,7 @@ Recommended formats for easy readability:
 - **Simple:** `TECHO-A1B2C3`
 - **Segmented:** `TECHO-2024-XYZ123`
 - **Date-based:** `TECHO-20240102-A1B2`
-- **Custom:** `REHABIT-PREMIUM-XYZ`
+- **Custom:** `REHABI-PREMIUM-XYZ`
 
 **Rules:**
 - Use uppercase for consistency
@@ -349,7 +349,7 @@ For issues with license system:
 - Check Firebase Console logs
 - Verify Firestore rules
 - Test with fresh account
-- Contact support@rehabit.app
+- Contact support@rehabi.app
 
 ---
 

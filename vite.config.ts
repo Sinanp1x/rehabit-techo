@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Rehabit Techo',
-        short_name: 'Rehabit',
+        name: 'Rehabi Techo',
+        short_name: 'Rehabi',
         description: 'Privacy-first habit tracker with E2E encryption and social features',
         theme_color: '#7C3AED',
         background_color: '#0F0F1A',

@@ -1,95 +1,214 @@
 // src/pages/StatsPage.tsx — Comprehensive analytics with fixed streaks & timeline
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useHabits } from '../hooks/useHabits';
-import { Flame, Trophy, Calendar, Download, Activity, ChevronLeft, ChevronRight, TrendingUp, Target } from 'lucide-react';
+import { auth } from '../firebase';
+import { useStore } from '../store/useStore';
+import { Flame, Trophy, Calendar, Download, Activity, ChevronLeft, ChevronRight, TrendingUp, Target, Sparkles, Dumbbell, BookOpen, Notebook, Droplet, Brain, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
+
+const getHabitIcon = (iconName?: string, color?: string) => {
+  const iconStyle = { color: color || 'var(--color-primary)' };
+  switch (iconName) {
+    case 'spiritual': return <Sparkles size={14} style={iconStyle} />;
+    case 'exercise': return <Dumbbell size={14} style={iconStyle} />;
+    case 'book': return <BookOpen size={14} style={iconStyle} />;
+    case 'journal': return <Notebook size={14} style={iconStyle} />;
+    case 'hydration': return <Droplet size={14} style={iconStyle} />;
+    case 'deepwork': return <Clock size={14} style={iconStyle} />;
+    case 'meditation': return <Brain size={14} style={iconStyle} />;
+    default: return <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color || 'var(--color-primary)' }} />;
+  }
+};
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+  PieChart, Pie, Cell, Tooltip, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Area, AreaChart,
+  XAxis, YAxis, CartesianGrid, Area, AreaChart,
 } from 'recharts';
-import { format, subDays, eachDayOfInterval, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay, getDay } from 'date-fns';
+import { format, subDays, eachDayOfInterval, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay, getDay, isBefore } from 'date-fns';
 import {
-  COMPLETIONS_PER_LEVEL, STATS_LOOKBACK_DAYS, MAX_SCORE,
-  DISCIPLINE_TARGET, RESPONSIBILITY_TARGET, DEVOTION_TARGET, FOCUS_TARGET,
+  COMPLETIONS_PER_LEVEL,
+  STATS_LOOKBACK_DAYS,
 } from '../constants/metrics';
-import { getWeeklyCompletionPct, getMonthlyCompletionPcts, getCurrentStreak, getLongestStreak } from '../utils/stats';
+import {
+  getWeeklyCompletionPct,
+  getMonthlyCompletionPcts,
+  getCurrentStreak,
+  getLongestStreak,
+  getCategoryCompletionData,
+  getPersonalityRadarData,
+} from '../utils/stats';
+import { fetchRemoteLogsInRange, getRollingHistoryStartDate, mergeLogsForStats } from '../services/history';
+import type { HabitLog } from '../db';
 
 const CHART_COLORS = ['#7C3AED', '#3B82F6', '#14B8A6', '#EC4899', '#F97316', '#22C55E', '#EAB308'];
+const HEATMAP_DAY_WIDTH = 34;
+const HEATMAP_NAME_WIDTH = 160;
 
-export const StatsPage = () => {
-  const { habits = [], allLogs = [] } = useHabits();
-  const [currentDate, setCurrentDate] = useState(new Date());
+const useMeasuredWidth = () => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
 
-  const trackableHabits = habits.filter((h) => h.type === 'habit');
-  const habitIds = trackableHabits.map((h) => h.id);
-  const habitLogs = allLogs.filter((l) => habitIds.includes(l.habitId));
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
 
-  const today = new Date();
-  const totalCompletions = habitLogs.filter((l) => l.status === 'done' || l.status === 'partial').length;
-  const level = Math.floor(totalCompletions / COMPLETIONS_PER_LEVEL) + 1;
+    const updateWidth = () => {
+      setWidth(Math.round(node.getBoundingClientRect().width));
+    };
 
-  // Best streak across all habits
-  const bestStreak = Math.max(0, ...trackableHabits.map((h) => getLongestStreak(h.id!, allLogs, h)));
-  const weeklyPct = getWeeklyCompletionPct(trackableHabits, allLogs);
+    updateWidth();
 
-  // Last 7 days bar data
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(today, 6 - i);
-    const dateStr = format(d, 'yyyy-MM-dd');
-    const dayIndex = getDay(d);
-    const scheduled = trackableHabits.filter((h) => h.frequencyDays.includes(dayIndex)).length;
-    const done = habitLogs.filter((l) => l.date === dateStr && (l.status === 'done' || l.status === 'partial')).length;
-    const score = scheduled === 0 ? 0 : Math.min(100, Math.round((done / scheduled) * 100));
-    return { dayName: format(d, 'EEE'), isToday: isSameDay(d, today), score, done, scheduled };
-  });
-
-  // Monthly timeline (last 6 months)
-  const monthlyData = getMonthlyCompletionPcts(trackableHabits, allLogs, 6);
-
-  // Category pie chart
-  const categoryData = trackableHabits.reduce((acc: any[], habit) => {
-    const count = habitLogs.filter((l) => l.habitId === habit.id).length;
-    if (count === 0) return acc;
-    for (const tag of habit.tags) {
-      const existing = acc.find((c: any) => c.name === tag);
-      if (existing) existing.value += count;
-      else acc.push({ name: tag, value: count, color: habit.color });
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
     }
-    return acc;
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
+  return [ref, width] as const;
+};
+
+export const StatsPage = () => {
+  const { habits = [], allLogs = [] } = useHabits() || { habits: [], allLogs: [] };
+  const { realtimeLoading, realtimeReady } = useStore();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [remoteLogs, setRemoteLogs] = useState<HabitLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [monthlyChartRef, monthlyChartWidth] = useMeasuredWidth();
+  const [pieChartRef, pieChartWidth] = useMeasuredWidth();
+  const [radarChartRef, radarChartWidth] = useMeasuredWidth();
+
+  const userId = auth.currentUser?.uid;
+
+  const trackableHabits = useMemo(() => (habits || []).filter((h) => h && h.type === 'habit'), [habits]);
+  const trackableHabitIds = useMemo(() => 
+    trackableHabits.map((habit) => habit.id).filter((id): id is number => typeof id === 'number'),
+    [trackableHabits]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHistory = async () => {
+      if (!userId) {
+        setRemoteLogs([]);
+        setHistoryLoading(false);
+        return;
+      }
+
+      setHistoryLoading(true);
+      try {
+        const logs = await fetchRemoteLogsInRange(getRollingHistoryStartDate());
+        if (!cancelled) setRemoteLogs(logs || []);
+      } catch {
+        if (!cancelled) setRemoteLogs([]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const statsLogs = useMemo(() => mergeLogsForStats(allLogs || [], remoteLogs || []) || [], [allLogs, remoteLogs]);
+  
+  const habitLogs = useMemo(() => {
+    return (statsLogs || []).filter((log) => log && trackableHabitIds.includes(log.habitId)) || [];
+  }, [statsLogs, trackableHabitIds]);
+
+  const today = useMemo(() => new Date(), []);
+  
+  const totalCompletions = useMemo(() => {
+    return habitLogs.filter((l) => l && (l.status === 'done' || l.status === 'partial')).length || 0;
+  }, [habitLogs]);
+
+  const level = useMemo(() => Math.floor(totalCompletions / COMPLETIONS_PER_LEVEL) + 1, [totalCompletions]);
+
+  // Best streak across all habits
+  const bestStreak = useMemo(() => {
+    if (trackableHabits.length === 0) return 0;
+    const streaks = trackableHabits.map((h) => h.id ? getLongestStreak(h.id, statsLogs, h) : 0);
+    return streaks.length > 0 ? Math.max(0, ...streaks) : 0;
+  }, [trackableHabits, statsLogs]);
+
+  const weeklyPct = useMemo(() => getWeeklyCompletionPct(trackableHabits, statsLogs) || 0, [trackableHabits, statsLogs]);
+
+  // Last 7 days bar data
+  const last7Days = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(today, 6 - i);
+      const dateStr = format(d, 'yyyy-MM-dd') || '';
+      const dayIndex = getDay(d);
+      const scheduled = trackableHabits.filter((h) => h.frequencyDays?.includes(dayIndex)).length;
+      const done = habitLogs.filter((l) => l.date === dateStr && (l.status === 'done' || l.status === 'partial')).length;
+      const score = scheduled === 0 ? 0 : Math.min(100, Math.round((done / scheduled) * 100));
+      return { dayName: format(d, 'EEE') || '', isToday: isSameDay(d, today), score: score || 0, done: done || 0, scheduled: scheduled || 0 };
+    }) || [];
+  }, [trackableHabits, habitLogs, today]);
+
+  // Monthly timeline (last 6 months)
+  const monthlyData = useMemo(() => {
+    return getMonthlyCompletionPcts(trackableHabits, statsLogs, 6) || [];
+  }, [trackableHabits, statsLogs]);
+
+  // Category pie chart
+  const historyStartDate = useMemo(() => startOfMonth(subMonths(today, 11)), [today]);
+  const categoryData = useMemo(() => {
+    return getCategoryCompletionData(trackableHabits, statsLogs, historyStartDate, today) || [];
+  }, [trackableHabits, statsLogs, historyStartDate, today]);
+  const categorySlices = useMemo(() => categoryData.filter((item) => item.value > 0), [categoryData]);
+
   // Personality radar
-  const recentLogs = allLogs.filter((l) => l.date >= format(subDays(today, STATS_LOOKBACK_DAYS), 'yyyy-MM-dd'));
-  const activeDays = new Set(recentLogs.map((l) => l.date)).size;
-  const scoreConsistency = Math.min(MAX_SCORE, (activeDays / STATS_LOOKBACK_DAYS) * 100);
-  const habitItems = habits.filter((h) => h.type === 'habit');
-  const habitLogCount = recentLogs.filter((l) => habits.find((h) => h.id === l.habitId)?.type === 'habit').length;
-  const scoreDiscipline = habitItems.length ? Math.min(MAX_SCORE, (habitLogCount / (habitItems.length * DISCIPLINE_TARGET)) * 100) : 0;
-  const reminderItems = habits.filter((h) => h.type === 'reminder');
-  const reminderLogCount = recentLogs.filter((l) => habits.find((h) => h.id === l.habitId)?.type === 'reminder').length;
-  const scoreResponsibility = reminderItems.length ? Math.min(MAX_SCORE, (reminderLogCount / (reminderItems.length * RESPONSIBILITY_TARGET)) * 100) : 0;
-  const scoreDevotion = Math.min(MAX_SCORE, (recentLogs.length / DEVOTION_TARGET) * 100);
-  const timedItems = habits.filter((h) => h.hasTime);
-  const timedLogCount = recentLogs.filter((l) => habits.find((h) => h.id === l.habitId)?.hasTime).length;
-  const scoreFocus = timedItems.length ? Math.min(MAX_SCORE, (timedLogCount / (timedItems.length * FOCUS_TARGET)) * 100) : 0;
+  const personalityData = useMemo(() => {
+    return getPersonalityRadarData(habits || [], statsLogs, STATS_LOOKBACK_DAYS) || [];
+  }, [habits, statsLogs]);
 
-  const personalityData = [
-    { subject: 'Consistency', A: Math.round(scoreConsistency), fullMark: MAX_SCORE },
-    { subject: 'Discipline', A: Math.round(scoreDiscipline), fullMark: MAX_SCORE },
-    { subject: 'Responsibility', A: Math.round(scoreResponsibility), fullMark: MAX_SCORE },
-    { subject: 'Devotion', A: Math.round(scoreDevotion), fullMark: MAX_SCORE },
-    { subject: 'Focus', A: Math.round(scoreFocus), fullMark: MAX_SCORE },
-  ];
+  // Rolling 12-month continuous dates sequence for the new Heatmap Timeline Grid
+  const startOfTimeline = useMemo(() => startOfMonth(subMonths(currentDate, 11)), [currentDate]);
+  const endOfTimeline = useMemo(() => endOfMonth(currentDate), [currentDate]);
+  
+  const datesTimeline = useMemo(() => {
+    try {
+      return eachDayOfInterval({ start: startOfTimeline, end: endOfTimeline }) || [];
+    } catch {
+      return [];
+    }
+  }, [startOfTimeline, endOfTimeline]);
 
-  // Month calendar
+  // Autoscroll scrollRef to show the latest dates on mount/dates calculated
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [datesTimeline]);
+
+  // Month calendar variables for CSV Export compatibility
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const daysInMonth = useMemo(() => {
+    try {
+      return eachDayOfInterval({ start: monthStart, end: monthEnd }) || [];
+    } catch {
+      return [];
+    }
+  }, [monthStart, monthEnd]);
+
+  const minVisibleMonth = startOfMonth(subMonths(today, 11));
+  const canGoBackward = isBefore(minVisibleMonth, monthStart);
+  const canGoForward = isBefore(monthStart, startOfMonth(today));
 
   // CSV Export
   const handleExport = () => {
-    const headers = ['Date', ...trackableHabits.map((h) => h.title)];
+    const headers = ['Date', ...trackableHabits.map((h) => h.title || 'Untitled')];
     const rows = daysInMonth.map((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
       const rowData = trackableHabits.map((h) => {
@@ -103,7 +222,7 @@ export const StatsPage = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Rehabit_${format(currentDate, 'MMM_yyyy')}.csv`;
+    link.download = `Rehabi_${format(currentDate, 'MMM_yyyy') || 'export'}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -177,9 +296,9 @@ export const StatsPage = () => {
           <TrendingUp size={16} className="text-accent-teal" />
           <h3 className="font-bold text-text-main">6-Month Progress</h3>
         </div>
-        <div className="h-40">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+        <div ref={monthlyChartRef} className="h-40 w-full min-w-0">
+          {monthlyChartWidth > 0 ? (
+            <AreaChart width={monthlyChartWidth} height={160} data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradPct" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.4} />
@@ -195,28 +314,51 @@ export const StatsPage = () => {
               />
               <Area type="monotone" dataKey="pct" stroke="#7C3AED" strokeWidth={2} fill="url(#gradPct)" dot={{ fill: '#7C3AED', r: 4 }} />
             </AreaChart>
-          </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full rounded-xl shimmer" />
+          )}
         </div>
       </div>
 
       {/* Category Balance Pie */}
       <div className="glass rounded-2xl p-5 mb-5">
         <h3 className="font-bold text-text-main mb-4">Category Balance</h3>
-        {categoryData.length > 0 ? (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={4} dataKey="value">
-                  {categoryData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color || CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ background: '#16213E', border: '1px solid #2A2A4A', borderRadius: 12, color: '#F1F5F9' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ color: '#94A3B8', fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+        {categorySlices.length > 0 ? (
+          <div className="flex flex-col items-center gap-4 py-2">
+            <div className="relative w-full max-w-[320px] aspect-square">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: `conic-gradient(${categorySlices
+                    .map((entry, index) => {
+                      const total = categorySlices.reduce((sum, item) => sum + item.value, 0) || 1;
+                      const start = categorySlices.slice(0, index).reduce((sum, item) => sum + item.value, 0);
+                      const startPct = (start / total) * 100;
+                      const endPct = ((start + entry.value) / total) * 100;
+                      return `${entry.color || CHART_COLORS[index % CHART_COLORS.length]} ${startPct}% ${endPct}%`;
+                    })
+                    .join(', ')})`,
+                }}
+              />
+              <div className="absolute inset-[18%] rounded-full border border-border bg-surface/90 backdrop-blur-sm flex flex-col items-center justify-center text-center px-4">
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-muted">Done</span>
+                <span className="text-3xl font-black text-text-main leading-none mt-2">
+                  {categorySlices.reduce((sum, item) => sum + item.value, 0)}
+                </span>
+                <span className="text-xs text-text-muted mt-2">completed habits</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-4 text-xs text-text-muted">
+              {categoryData.map((entry, index) => (
+                <div key={entry.name} className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: entry.color || CHART_COLORS[index % CHART_COLORS.length] }}
+                  />
+                  <span>{entry.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="h-32 flex items-center justify-center text-text-muted text-sm">
@@ -232,87 +374,146 @@ export const StatsPage = () => {
           <h3 className="font-bold text-text-main">Your Stats Profile</h3>
         </div>
         <p className="text-xs text-text-muted mb-4">Based on last {STATS_LOOKBACK_DAYS} days</p>
-        <div className="h-52">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="70%" data={personalityData}>
+        <div ref={radarChartRef} className="h-52 w-full min-w-0">
+          {radarChartWidth > 0 ? (
+            <RadarChart width={radarChartWidth} height={208} cx="50%" cy="50%" outerRadius="70%" data={personalityData}>
               <PolarGrid stroke="#2A2A4A" />
               <PolarAngleAxis dataKey="subject" tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 'bold' }} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
               <Radar name="You" dataKey="A" stroke="#7C3AED" strokeWidth={2.5} fill="#7C3AED" fillOpacity={0.25} />
               <Tooltip contentStyle={{ background: '#16213E', border: '1px solid #2A2A4A', borderRadius: 12, color: '#F1F5F9' }} />
             </RadarChart>
-          </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full rounded-xl shimmer" />
+          )}
         </div>
       </div>
 
       {/* Habit Heatmap Table */}
-      <div className="glass rounded-2xl overflow-hidden mb-5">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <button onClick={() => setCurrentDate((d) => subMonths(d, 1))} className="p-2 hover:bg-surface rounded-lg transition-colors">
-            <ChevronLeft size={18} className="text-text-sub" />
-          </button>
-          <h3 className="font-bold text-text-main">{format(currentDate, 'MMMM yyyy')}</h3>
-          <button onClick={() => setCurrentDate((d) => addMonths(d, 1))} className="p-2 hover:bg-surface rounded-lg transition-colors">
-            <ChevronRight size={18} className="text-text-sub" />
-          </button>
+      <div className="glass rounded-2xl overflow-hidden mb-5 flex flex-col" style={{ minHeight: 420 }}>
+        <div className="p-5 border-b border-border bg-surface/50">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-primary" />
+            <h3 className="font-bold text-text-main text-base">Rolling 12-Month Timeline</h3>
+          </div>
+          <p className="text-xs text-text-muted mt-1 leading-relaxed">
+            A continuous historical record of active habits spanning the last 12 months. Scroll horizontally to browse dates (autoscrolls to today).
+          </p>
         </div>
-        <div className="overflow-auto custom-scrollbar">
-          <table className="w-full border-collapse min-w-max">
-            <thead className="bg-surface sticky top-0 z-10">
-              <tr>
-                <th className="p-2 text-left text-xs font-bold text-text-muted uppercase tracking-wide sticky left-0 bg-surface z-20 border-r border-border min-w-[100px]">Habit</th>
-                {daysInMonth.map((day) => {
-                  const isToday = isSameDay(day, new Date());
-                  return (
-                    <th key={day.toString()} className={clsx('p-1 min-w-[32px] text-center', isToday ? 'bg-primary/10' : '')}>
-                      <div className={clsx('text-[9px] font-bold uppercase', isToday ? 'text-primary' : 'text-text-muted')}>
-                        {format(day, 'EEEEE')}
-                      </div>
-                      <div className={clsx('w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium mx-auto mt-0.5', isToday ? 'bg-primary text-white' : 'text-text-muted')}>
-                        {format(day, 'd')}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {trackableHabits.map((habit) => (
-                <tr key={habit.id} className="border-b border-border/50">
-                  <td className="p-2 text-xs font-medium sticky left-0 z-10 border-r border-border/50 bg-card min-w-[100px]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: habit.color }} />
-                      <span className="truncate text-text-sub">{habit.title}</span>
-                    </div>
-                  </td>
-                  {daysInMonth.map((day) => {
-                    const dateStr = format(day, 'yyyy-MM-dd');
-                    const log = allLogs.find((l) => l.habitId === habit.id && l.date === dateStr);
+        
+        <div className="p-4 flex-1" style={{ minHeight: 320 }}>
+          {realtimeLoading && !realtimeReady ? (
+            <div className="px-4 py-10 text-center text-text-muted text-sm">
+              Loading habits and monthly history...
+            </div>
+          ) : trackableHabits.length > 0 ? (
+            <div>
+              {/* Outer scroll container */}
+              <div 
+                ref={scrollRef}
+                className="overflow-x-auto custom-scrollbar overflow-y-hidden w-full"
+                style={{ willChange: 'transform', scrollBehavior: 'smooth' }}
+              >
+                <div
+                  className="grid gap-0 min-w-max"
+                  style={{ gridTemplateColumns: `180px repeat(${datesTimeline.length}, 36px)` }}
+                >
+                  {/* Habits Header Column */}
+                  <div className="sticky left-0 top-0 z-20 bg-surface border-b border-r border-border px-4 py-3 text-left text-xs font-black text-text-muted uppercase tracking-wider w-[180px] h-[52px] shrink-0 flex items-center">
+                    Habits
+                  </div>
+                  
+                  {/* Timeline Header Cells */}
+                  {datesTimeline.map((day, index) => {
+                    const isMonthStart = day.getDate() === 1 || index === 0;
+                    const isToday = isSameDay(day, new Date());
                     return (
-                      <td key={`${habit.id}-${dateStr}`} className="p-1 text-center">
-                        <div
-                          className={clsx('w-5 h-5 rounded-md mx-auto transition-all', log ? 'scale-100' : 'scale-75 opacity-20')}
-                          style={{
-                            backgroundColor: log
-                              ? log.status === 'done' ? habit.color
-                              : log.status === 'partial' ? habit.color + '80'
-                              : '#3B82F6'
-                              : '#2A2A4A',
-                          }}
-                        />
-                      </td>
+                      <div
+                        key={format(day, 'yyyy-MM-dd')}
+                        className={clsx(
+                          'border-b border-border text-center w-[36px] h-[52px] shrink-0 flex flex-col items-center justify-center relative',
+                          isToday ? 'bg-primary/10' : 'bg-surface',
+                        )}
+                      >
+                        {isMonthStart && (
+                          <span className="absolute top-1 text-[8px] font-black uppercase text-primary tracking-tight">
+                            {format(day, 'MMM')}
+                          </span>
+                        )}
+                        <div className={clsx('text-[8px] font-bold uppercase leading-none mt-2', isToday ? 'text-primary' : 'text-text-muted')}>
+                          {format(day, 'EEEEE')}
+                        </div>
+                        <div className={clsx('w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-medium mx-auto mt-0.5', isToday ? 'bg-primary text-white' : 'text-text-muted')}>
+                          {format(day, 'd')}
+                        </div>
+                      </div>
                     );
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {/* Legend */}
-        <div className="px-4 py-3 flex gap-4 text-xs text-text-muted border-t border-border">
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-primary" /> Done</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-primary/40" /> Partial</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Skipped</div>
+
+                  {/* Rows mapping out active habits & dates */}
+                  {trackableHabits.map((habit) => (
+                    <Fragment key={`row-${habit.id}`}>
+                      <div
+                        key={`name-${habit.id}`}
+                        className="sticky left-0 z-10 bg-card border-r border-b border-border/50 px-3 py-2 w-[180px] h-[36px] shrink-0 flex items-center gap-2"
+                      >
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${habit.color}15` }}>
+                          {getHabitIcon(habit.icon, habit.color)}
+                        </div>
+                        <span className="truncate text-xs font-bold text-text-sub">{habit.title}</span>
+                      </div>
+                      
+                      {datesTimeline.map((day) => {
+                        const dateStr = format(day, 'yyyy-MM-dd');
+                        const log = statsLogs.find((entry) => entry.habitId === habit.id && entry.date === dateStr);
+                        
+                        let cellBg = '';
+                        let cellClass = 'w-4 h-4 rounded-full transition-all duration-150 ';
+
+                        if (log) {
+                          if (log.status === 'done') {
+                            cellBg = habit.color;
+                            cellClass += 'scale-100 shadow-sm opacity-100';
+                          } else if (log.status === 'partial') {
+                            cellBg = habit.color;
+                            cellClass += 'scale-100 shadow-sm opacity-50';
+                          } else { // skipped
+                            cellBg = '#3B82F6';
+                            cellClass += 'scale-100 shadow-sm opacity-80';
+                          }
+                        } else {
+                          // Clean neutral placeholder
+                          cellClass += 'scale-75 opacity-100 bg-border/25 dark:bg-border/10 border border-border/5 hover:bg-border/40';
+                        }
+
+                        return (
+                          <div key={`${habit.id}-${dateStr}`} className={clsx('border-b border-border/50 border-r border-border/30 p-1 w-[36px] h-[36px] shrink-0 flex items-center justify-center', isSameDay(day, new Date()) ? 'bg-primary/5' : 'bg-card')}>
+                            <div
+                              className={cellClass}
+                              style={cellBg ? { backgroundColor: cellBg } : undefined}
+                              title={`${habit.title} · ${format(day, 'MMM d, yyyy')} ${log ? `· ${log.status}` : '· Incomplete'}`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Legend of statuses */}
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-text-muted border-t border-border pt-3">
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-primary" /> Done</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-primary/40" /> Partial</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Skipped</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-border/25 dark:bg-border/10 border border-border/5" /> Incomplete</div>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-10 text-center text-text-muted text-sm">
+              Add at least one habit to see the heatmap.
+            </div>
+          )}
         </div>
       </div>
     </div>

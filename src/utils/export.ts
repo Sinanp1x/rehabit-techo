@@ -35,7 +35,7 @@ export const exportAllData = async (): Promise<void> => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `rehabit-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
+  link.download = `rehabi-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

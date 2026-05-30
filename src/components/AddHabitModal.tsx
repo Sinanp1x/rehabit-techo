@@ -1,10 +1,20 @@
 // src/components/AddHabitModal.tsx — Full habit creation with tags, quantity, multi-reminder
 import { useState } from 'react';
-import { X, Clock, Repeat, Plus, Trash2, Tag, Target } from 'lucide-react';
+import { X, Clock, Repeat, Plus, Trash2, Tag, Target, Sparkles, Dumbbell, BookOpen, Notebook, Droplet, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { DEFAULT_HABIT_COLORS, DAYS_OF_WEEK, DEFAULT_TAGS, TAG_COLORS } from '../constants/metrics';
 import type { Habit } from '../db';
+
+export const HABIT_ICONS = [
+  { name: 'spiritual', label: 'Spiritual', icon: Sparkles },
+  { name: 'exercise', label: 'Exercise', icon: Dumbbell },
+  { name: 'book', label: 'Book', icon: BookOpen },
+  { name: 'journal', label: 'Journal', icon: Notebook },
+  { name: 'hydration', label: 'Hydration', icon: Droplet },
+  { name: 'deepwork', label: 'Deep Work', icon: Clock },
+  { name: 'meditation', label: 'Meditation', icon: Brain },
+];
 
 type HabitInput = Omit<Habit, 'id' | 'userId' | 'archived' | 'syncStatus'>;
 
@@ -21,6 +31,7 @@ export const AddHabitModal = ({ isOpen, onClose, onAdd, initialData, editMode }:
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData?.tags ?? []);
   const [customTag, setCustomTag] = useState('');
   const [color, setColor] = useState(initialData?.color ?? DEFAULT_HABIT_COLORS[0]);
+  const [selectedIcon, setSelectedIcon] = useState<string>(initialData?.icon ?? 'exercise');
   const [selectedDays, setSelectedDays] = useState<number[]>(initialData?.frequencyDays ?? [0,1,2,3,4,5,6]);
   const [type, setType] = useState<'habit' | 'reminder'>(initialData?.type ?? 'habit');
   const [hasTime, setHasTime] = useState(initialData?.hasTime ?? true);
@@ -56,6 +67,7 @@ export const AddHabitModal = ({ isOpen, onClose, onAdd, initialData, editMode }:
       title: title.trim(),
       tags: selectedTags.length > 0 ? selectedTags : ['General'],
       color,
+      icon: selectedIcon,
       type,
       hasTime,
       time: hasTime ? time : '00:00',
@@ -175,6 +187,49 @@ export const AddHabitModal = ({ isOpen, onClose, onAdd, initialData, editMode }:
                   </button>
                 </div>
               </div>
+
+              {/* Icon Picker */}
+              {type === 'habit' && (
+                <div>
+                  <label className="block text-xs font-bold text-text-sub uppercase tracking-wide mb-3">Icon</label>
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-3">
+                    {HABIT_ICONS.map((item) => {
+                      const IconComponent = item.icon;
+                      const isSelected = selectedIcon === item.name;
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => setSelectedIcon(item.name)}
+                          className={clsx(
+                            'p-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all border',
+                            isSelected
+                              ? 'border-primary/50 shadow-glow-sm bg-surface scale-105'
+                              : 'bg-background hover:bg-surface border-border/40 hover:border-primary/20 opacity-80 hover:opacity-100'
+                          )}
+                          style={isSelected ? { backgroundColor: `${color}10` } : {}}
+                        >
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all"
+                            style={{
+                              backgroundColor: isSelected ? color : 'var(--color-border)',
+                              opacity: isSelected ? 1 : 0.65
+                            }}
+                          >
+                            <IconComponent
+                              size={20}
+                              style={{ color: isSelected ? '#FFFFFF' : 'var(--color-text-sub)' }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-text-sub truncate w-full text-center">
+                            {item.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Color */}
               <div>

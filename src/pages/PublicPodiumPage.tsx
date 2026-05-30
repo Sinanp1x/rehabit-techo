@@ -2,12 +2,12 @@
 import { useState, useRef } from 'react';
 import { toPng } from 'html-to-image';
 import { motion } from 'framer-motion';
-import { Share2, Download, Trophy, Flame, Shield, Lock, Image } from 'lucide-react';
+import { Share2, Download, Trophy, Flame, Shield, Lock, Image, Sparkles, Dumbbell, BookOpen, Notebook, Droplet, Brain, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useHabits } from '../hooks/useHabits';
 import { auth } from '../firebase';
-import { getWeeklyCompletionPct, getMonthlyCompletionPcts, getCurrentStreak } from '../utils/stats';
-import { format } from 'date-fns';
+import { getScheduledOccurrencesInRange, getCompletedOccurrencesInRange, getCurrentStreak } from '../utils/stats';
+import { format, subDays } from 'date-fns';
 import { useStore } from '../store/useStore';
 
 const TIME_RANGES = [
@@ -16,6 +16,20 @@ const TIME_RANGES = [
   { value: '90', label: 'Last 3 months' },
   { value: '365', label: 'This year' },
 ];
+
+const getHabitIcon = (iconName?: string, color?: string) => {
+  const iconStyle = { color: color || 'var(--color-primary)' };
+  switch (iconName) {
+    case 'spiritual': return <Sparkles size={14} style={iconStyle} />;
+    case 'exercise': return <Dumbbell size={14} style={iconStyle} />;
+    case 'book': return <BookOpen size={14} style={iconStyle} />;
+    case 'journal': return <Notebook size={14} style={iconStyle} />;
+    case 'hydration': return <Droplet size={14} style={iconStyle} />;
+    case 'deepwork': return <Clock size={14} style={iconStyle} />;
+    case 'meditation': return <Brain size={14} style={iconStyle} />;
+    default: return <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color || 'var(--color-primary)' }} />;
+  }
+};
 
 export const PublicPodiumPage = () => {
   const { habits, allLogs } = useHabits();
@@ -35,14 +49,25 @@ export const PublicPodiumPage = () => {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
-  // Compute stats for selected habits
+  // Compute stats for selected habits using the selected time range
   const selectedHabits = trackableHabits.filter((h) => selectedHabitIds.includes(h.id!));
-  const overallCompletion = selectedHabits.length === 0 ? 0 :
-    Math.round(selectedHabits.reduce((sum, h) => {
-      const hLogs = allLogs.filter((l) => l.habitId === h.id && (l.status === 'done' || l.status === 'partial'));
-      const scheduled = allLogs.filter((l) => l.habitId === h.id).length + 1;
-      return sum + (hLogs.length / Math.max(1, scheduled)) * 100;
-    }, 0) / selectedHabits.length);
+
+  const days = parseInt(timeRange, 10);
+  const endDate = new Date();
+  const startDate = subDays(endDate, days - 1);
+
+  const habitsWithSchedule = selectedHabits.filter(
+    (h) => getScheduledOccurrencesInRange(h, startDate, endDate) > 0,
+  );
+
+  const overallCompletion = habitsWithSchedule.length === 0 ? 0 :
+    Math.round(
+      habitsWithSchedule.reduce((sum, h) => {
+        const scheduled = getScheduledOccurrencesInRange(h, startDate, endDate);
+        const completed = getCompletedOccurrencesInRange(h, allLogs, startDate, endDate);
+        return sum + (completed / scheduled) * 100;
+      }, 0) / habitsWithSchedule.length,
+    );
 
   const badgeLabel =
     overallCompletion >= 90 ? '🏆 Elite Performer' :
@@ -59,7 +84,7 @@ export const PublicPodiumPage = () => {
     try {
       const dataUrl = await toPng(cardRef.current, { quality: 1, pixelRatio: 2 });
       const link = document.createElement('a');
-      link.download = `rehabit-achievement-${format(new Date(), 'yyyy-MM-dd')}.png`;
+      link.download = `rehabi-achievement-${format(new Date(), 'yyyy-MM-dd')}.png`;
       link.href = dataUrl;
       link.click();
       addToast('Achievement card downloaded!', 'success');
@@ -79,16 +104,16 @@ export const PublicPodiumPage = () => {
     try {
       const dataUrl = await toPng(cardRef.current, { quality: 1, pixelRatio: 2 });
       const blob = await fetch(dataUrl).then((r) => r.blob());
-      const file = new File([blob], 'rehabit-achievement.png', { type: 'image/png' });
+      const file = new File([blob], 'rehabi-achievement.png', { type: 'image/png' });
       if (navigator.share && navigator.canShare({ files: [file] })) {
         await navigator.share({
-          title: 'My Rehabit Echo Achievement',
+          title: 'My Rehabi Techo Achievement',
           text: `${badgeLabel} — ${overallCompletion}% consistency!`,
           files: [file],
         });
       } else {
         await navigator.clipboard.writeText(
-          `${badgeLabel} — ${overallCompletion}% consistency on Rehabit Echo!`,
+          `${badgeLabel} — ${overallCompletion}% consistency on Rehabi Techo!`,
         );
         addToast('Link copied! (Web Share not supported on this device)', 'info');
       }
@@ -157,7 +182,9 @@ export const PublicPodiumPage = () => {
                       isSelected ? 'border-primary bg-primary/10' : 'border-border bg-background',
                     )}
                   >
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: habit.color }} />
+                    <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${habit.color}18` }}>
+                      {getHabitIcon(habit.icon, habit.color)}
+                    </div>
                     <span className="flex-1 text-sm font-medium text-text-main">{habit.title}</span>
                     {streak > 0 && (
                       <div className="flex items-center gap-1 text-orange-400">
@@ -193,7 +220,7 @@ export const PublicPodiumPage = () => {
               {/* Header */}
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Rehabit Echo</p>
+                  <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Rehabi Techo</p>
                   <p className="text-white font-black text-xl">{displayName}</p>
                   <p className="text-purple-300 text-xs">{TIME_RANGES.find((r) => r.value === timeRange)?.label}</p>
                 </div>
@@ -212,22 +239,100 @@ export const PublicPodiumPage = () => {
               </div>
 
               {/* Habits list */}
-              <div className="space-y-2 mb-5">
+              <div className="space-y-3 mb-5">
                 {selectedHabits.map((habit) => {
-                  const streak = getCurrentStreak(habit.id!, allLogs, habit);
-                  const doneLogs = allLogs.filter((l) => l.habitId === habit.id && (l.status === 'done' || l.status === 'partial')).length;
+                  const todayStr = format(new Date(), 'yyyy-MM-dd');
+                  const isCompletedToday = allLogs.some(
+                    (l) => l.habitId === habit.id && l.date === todayStr && (l.status === 'done' || l.status === 'partial')
+                  );
+
+                  // Total Committed Days in the last 30 days
+                  const todayObj = new Date();
+                  const totalCommittedDays = allLogs.filter((l) => {
+                    if (l.habitId !== habit.id) return false;
+                    if (l.status !== 'done' && l.status !== 'partial') return false;
+                    
+                    const logDate = new Date(l.date + 'T00:00:00');
+                    const diffTime = todayObj.getTime() - logDate.getTime();
+                    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                    return diffDays >= 0 && diffDays < 30;
+                  }).length;
+
+                  const continuousStreak = getCurrentStreak(habit.id!, allLogs, habit);
+                  const hideCommitted = totalCommittedDays === continuousStreak;
+
                   return (
-                    <div key={habit.id} className="flex items-center justify-between"
-                      style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 14px' }}>
-                      <div className="flex items-center gap-2">
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: habit.color, flexShrink: 0 }} />
-                        <span style={{ color: '#E2E8F0', fontSize: 13, fontWeight: 600 }}>{habit.title}</span>
+                    <div
+                      key={habit.id}
+                      className="flex flex-col gap-2"
+                      style={{
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: 14,
+                        padding: '12px 16px',
+                        border: '1px solid rgba(255,255,255,0.05)'
+                      }}
+                    >
+                      {/* Top Row: Habit Color + Title + Today's Live Status */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor: `${habit.color}15`,
+                              border: `1px solid ${habit.color}30`
+                            }}
+                          >
+                            {getHabitIcon(habit.icon, habit.color)}
+                          </div>
+                          <span style={{ color: '#F1F5F9', fontSize: 13, fontWeight: 700 }} className="truncate">
+                            {habit.title}
+                          </span>
+                        </div>
+
+                        {/* Real-time binary indicator */}
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{
+                            backgroundColor: isCompletedToday ? 'rgba(34, 197, 94, 0.15)' : 'rgba(148, 163, 184, 0.1)',
+                            border: isCompletedToday ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(148, 163, 184, 0.15)',
+                            color: isCompletedToday ? '#4ADE80' : '#94A3B8'
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{
+                              backgroundColor: isCompletedToday ? '#22C55E' : '#94A3B8',
+                              boxShadow: isCompletedToday ? '0 0 8px #22C55E' : 'none'
+                            }}
+                          />
+                          {isCompletedToday ? 'LIVE: DONE' : 'LIVE: PENDING'}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {streak > 0 && (
-                          <span style={{ color: '#FB923C', fontSize: 12, fontWeight: 700 }}>🔥 {streak}d</span>
+
+                      {/* Bottom Row: Streak metrics */}
+                      <div className="flex items-center gap-3 mt-1 justify-end">
+                        {!hideCommitted && (
+                          <div
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
+                            style={{
+                              background: 'rgba(167, 139, 250, 0.1)',
+                              color: '#C084FC',
+                              border: '1px solid rgba(167, 139, 250, 0.15)'
+                            }}
+                          >
+                            <span>Committed: {totalCommittedDays}d</span>
+                          </div>
                         )}
-                        <span style={{ color: '#A78BFA', fontSize: 12, fontWeight: 700 }}>{doneLogs} done</span>
+                        
+                        <div
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold"
+                          style={{
+                            background: 'rgba(251, 146, 60, 0.15)',
+                            color: '#FB923C',
+                            border: '1px solid rgba(251, 146, 60, 0.25)'
+                          }}
+                        >
+                          <span>Streak: {continuousStreak}d 🔥</span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -237,10 +342,19 @@ export const PublicPodiumPage = () => {
               {/* Footer */}
               <div className="flex items-center gap-2 pt-4"
                 style={{ borderTop: '1px solid rgba(124,58,237,0.2)' }}>
-                <Shield size={14} style={{ color: '#22C55E' }} />
-                <p style={{ color: '#94A3B8', fontSize: 11 }}>
-                  This data is end-to-end encrypted and verified — I cannot cheat.
-                </p>
+                {e2ee.enabled ? (
+                  <>
+                    <Shield size={14} style={{ color: '#22C55E' }} />
+                    <p style={{ color: '#94A3B8', fontSize: 11 }}>
+                      This data is end-to-end encrypted and verified — I cannot cheat.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Lock size={14} style={{ color: '#7C3AED' }} />
+                    <p style={{ color: '#94A3B8', fontSize: 11 }}>rehabitecho.p1xion.app</p>
+                  </>
+                )}
               </div>
             </div>
           </div>

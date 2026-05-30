@@ -107,7 +107,7 @@ export const scheduleAllReminders = async (
 
 function fireNotification(habitTitle: string, time: string): void {
   if (Notification.permission !== 'granted') return;
-  new Notification('⏰ Rehabit Techo', {
+  new Notification('⏰ Rehabi Techo', {
     body: `Time to: ${habitTitle}`,
     icon: '/icon-192.png',
     badge: '/icon-192.png',
@@ -122,7 +122,7 @@ function fireNotification(habitTitle: string, time: string): void {
 
 export const showTestNotification = (): void => {
   if (!areNotificationsSupported() || Notification.permission !== 'granted') return;
-  new Notification('🎉 Rehabit Techo', {
+  new Notification('🎉 Rehabi Techo', {
     body: 'Notifications are working! Your habit reminders will look like this.',
     icon: '/icon-192.png',
   });
